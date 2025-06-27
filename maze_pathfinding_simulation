@@ -209,7 +209,10 @@ class BFS(PathfindingAlgorithm):
             return 1.0
         if not self.frontier:
             return 0.0
-        min_dist = min(abs(ny - self.goal[0]) + abs(nx - self.goal[1]) for ny, nx in self.frontier)
+        try:
+            min_dist = min(abs(ny - self.goal[0]) + abs(nx - self.goal[1]) for ny, nx in self.frontier)
+        except ValueError:
+            return 0.0
         max_dist = self.width + self.height
         prog = 1.0 - (min_dist / max_dist)
         return max(0.0, min(prog, 1.0))
@@ -247,7 +250,10 @@ class DFS(PathfindingAlgorithm):
             return 1.0
         if not self.frontier:
             return 0.0
-        min_dist = min(abs(ny - self.goal[0]) + abs(nx - self.goal[1]) for ny, nx in self.frontier)
+        try:
+            min_dist = min(abs(ny - self.goal[0]) + abs(nx - self.goal[1]) for ny, nx in self.frontier)
+        except ValueError:
+            return 0.0
         max_dist = self.width + self.height
         prog = 1.0 - (min_dist / max_dist)
         return max(0.0, min(prog, 1.0))
@@ -303,7 +309,10 @@ class AStar(PathfindingAlgorithm):
             return 1.0
         if not self.frontier:
             return 0.0
-        min_f = min(f for f, _, _ in self.frontier)
+        try:
+            min_f = min(f for f, _, _ in self.frontier)
+        except ValueError:
+            return 0.0
         f_goal = self.heuristic(self.start, self.goal)
         prog = 1.0 - min(min_f / (f_goal + self.width + self.height), 1.0)
         return max(0.0, min(prog, 1.0))
@@ -419,7 +428,7 @@ class Simulation:
 
         self.clock = pygame.time.Clock()
 
-        # Generate maze (iteration 5: new random seed and fresh maze)
+        # Generate maze (iteration 6: new random seed and fresh maze)
         self.maze = Maze(self.grid_size, self.grid_size, complexity=self.complexity)
 
         # Define start and goal points: top-left and bottom-right open cells
@@ -429,12 +438,14 @@ class Simulation:
         # Ensure start and goal are different and path accessible
         if self.start == self.goal:
             # Try to find another goal if same as start
+            found_goal = False
             for y in range(self.grid_size - 2, 0, -1):
                 for x in range(self.grid_size - 2, 0, -1):
                     if self.maze.is_path(y, x) and (y, x) != self.start:
                         self.goal = (y, x)
+                        found_goal = True
                         break
-                if self.goal != self.start:
+                if found_goal:
                     break
 
         # Initialize algorithms
@@ -616,13 +627,18 @@ class Simulation:
         max_steps_per_frame = 1000  # safety cap to prevent infinite loops
         step_count = 0
         for _ in range(self.speed):
+            any_pending = False
             for alg_name, alg in self.algorithms.items():
                 if not alg.finished:
                     alg.step()
                     step_count += 1
+                    any_pending = True
                     if step_count >= max_steps_per_frame:
                         # Break early to avoid infinite processing in one frame
                         return
+            if not any_pending:
+                # All finished, no need to continue stepping more times this frame
+                break
 
     def update_audio(self):
         # Update continuous tones for each algorithm with pitch and volume according to progress

@@ -272,6 +272,7 @@ class AStar(PathfindingAlgorithm):
         self.explored = set()
 
     def heuristic(self, a, b):
+        # Manhattan distance
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
     def step(self):
@@ -314,7 +315,9 @@ class AStar(PathfindingAlgorithm):
             min_f = min(f for f, _, _ in self.frontier)
         except ValueError:
             return 0.0
+        # Heuristic from start to goal (max possible f)
         f_goal = self.heuristic(self.start, self.goal)
+        # Normalize progress between 0 and 1
         prog = 1.0 - min(min_f / (f_goal + self.width + self.height), 1.0)
         return max(0.0, min(prog, 1.0))
 
@@ -429,7 +432,7 @@ class Simulation:
 
         self.clock = pygame.time.Clock()
 
-        # Generate maze (iteration 8: fresh maze with new random seed)
+        # Generate maze (iteration 9: fresh maze with new random seed)
         random.seed()  # Ensure different random seed on each run for uniqueness
         self.maze = Maze(self.grid_size, self.grid_size, complexity=self.complexity)
 

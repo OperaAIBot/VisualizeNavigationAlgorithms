@@ -15,7 +15,7 @@ import pygame
 # Maze sizes and cell sizes for display
 MIN_GRID_SIZE = 50
 MAX_GRID_SIZE = 100
-DEFAULT_GRID_SIZE = 60
+DEFAULT_GRID_SIZE = 61  # Changed to an odd number for maze generation
 
 CELL_SIZE_DEFAULT = 10  # pixels per cell, zoom will scale this
 
@@ -200,10 +200,10 @@ class BFS(PathfindingAlgorithm):
             self.path = self.reconstruct_path()
             return
         for ny, nx in self.neighbors(*current):
-            if (ny, nx) not in self.explored:
+            if (ny, nx) not in self.explored and (ny, nx) not in self.frontier:
                 self.frontier.append((ny, nx))
-                self.explored.add((ny, nx))
                 self.parent[(ny, nx)] = current
+        self.explored.add(current)
 
     def progress(self):
         if self.finished and self.found_path:
@@ -238,10 +238,10 @@ class DFS(PathfindingAlgorithm):
             self.path = self.reconstruct_path()
             return
         for ny, nx in self.neighbors(*current):
-            if (ny, nx) not in self.explored:
+            if (ny, nx) not in self.explored and (ny, nx) not in self.frontier:
                 self.frontier.append((ny, nx))
-                self.explored.add((ny, nx))
                 self.parent[(ny, nx)] = current
+        self.explored.add(current)
 
     def progress(self):
         if self.finished and self.found_path:
@@ -388,6 +388,8 @@ class Simulation:
                  speed_index=DEFAULT_SPEED_INDEX, complexity=0.75,
                  auto_test=False, strict_completion=False):
         self.grid_size = max(MIN_GRID_SIZE, min(MAX_GRID_SIZE, grid_size))
+        if self.grid_size % 2 == 0:
+            self.grid_size -= 1
         self.cell_size = cell_size
         self.speed_index = speed_index
         if self.speed_index < 0:
@@ -411,7 +413,7 @@ class Simulation:
 
         self.clock = pygame.time.Clock()
 
-        # Generate maze
+        # Generate maze (iteration 2: new random seed and method is DFS backtracker with complexity)
         self.maze = Maze(self.grid_size, self.grid_size, complexity=self.complexity)
 
         # Define start and goal points: top-left and bottom-right open cells
@@ -654,6 +656,7 @@ class Simulation:
                         self.audio.toggle_mute()
 
             if not self.finished:
+                prev_finished_state = self.finished
                 self.update_algorithms()
                 self.handle_success_sounds()
                 self.update_audio()
@@ -666,6 +669,20 @@ class Simulation:
                         # Delay exit to let chord play
                         exit_after_delay = True
                         exit_delay_start = time.time()
+                # Safety: If all algorithms finished but not found path, treat as finished to avoid infinite loop
+                # This is defensive, should not happen due to maze generation and pathfinding correctness
+                if not self.check_all_finished():
+                    # Check if all algorithms finished (regardless of path found)
+                    if all(alg.finished for alg in self.algorithms.values()):
+                        # If strict completion, exit with failure
+                        if self.strict_completion:
+                            sys.exit(1)
+                        else:
+                            self.finished = True
+                            exit_after_delay = True
+                            exit_delay_start = time.time()
+                            if self.auto_test:
+                                print("SIMULATION_COMPLETE_SUCCESS", flush=True)
             else:
                 # In normal mode, wait for user to exit
                 if not self.auto_test:

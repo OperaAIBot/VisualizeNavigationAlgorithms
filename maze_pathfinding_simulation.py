@@ -279,11 +279,11 @@ class AStar(PathfindingAlgorithm):
         if self.finished:
             return
 
+        # Pop next node that is not already explored
         while self.frontier:
             _, _, current = self.heapq.heappop(self.frontier)
-            if current in self.explored:
-                continue  # Skip already explored nodes (may appear multiple times in heap)
-            break
+            if current not in self.explored:
+                break
         else:
             self.finished = True
             self.found_path = False
@@ -432,7 +432,7 @@ class Simulation:
 
         self.clock = pygame.time.Clock()
 
-        # Generate maze (iteration 9: fresh maze with new random seed)
+        # Generate maze (iteration 10: fresh maze with new random seed)
         random.seed()  # Ensure different random seed on each run for uniqueness
         self.maze = Maze(self.grid_size, self.grid_size, complexity=self.complexity)
 

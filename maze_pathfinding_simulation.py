@@ -348,7 +348,8 @@ def generate_victory_chord(frequencies, duration=1.5):
 
 class AudioSynthesizer:
     def __init__(self):
-        pygame.mixer.pre_init(SAMPLE_RATE, -16, 1, AUDIO_BUFFER_SIZE)
+        # Initialize mixer with stereo channels for better sound
+        pygame.mixer.pre_init(SAMPLE_RATE, -16, 2, AUDIO_BUFFER_SIZE)
         pygame.mixer.init()
         self.channels = {}
         self.muted = False
@@ -363,8 +364,10 @@ class AudioSynthesizer:
         if sound is None:
             # Generate a short sine wave buffer looped for continuous sound
             duration = 0.1
-            audio = generate_sine_wave(frequency, duration=duration, volume=volume)
-            sound = pygame.sndarray.make_sound(audio)
+            audio_mono = generate_sine_wave(frequency, duration=duration, volume=volume)
+            # Convert mono to stereo by duplicating channels
+            audio_stereo = np.column_stack((audio_mono, audio_mono)).astype(np.int16)
+            sound = pygame.sndarray.make_sound(audio_stereo)
             sound.set_volume(volume)
             self.sounds_cache[key] = sound
         channel = self.channels.get(name)
@@ -377,16 +380,18 @@ class AudioSynthesizer:
     def play_success_sound(self, name, frequency):
         if self.muted:
             return
-        audio = generate_success_sound(frequency)
-        sound = pygame.sndarray.make_sound(audio)
+        audio_mono = generate_success_sound(frequency)
+        audio_stereo = np.column_stack((audio_mono, audio_mono)).astype(np.int16)
+        sound = pygame.sndarray.make_sound(audio_stereo)
         sound.set_volume(0.8)
         sound.play()
 
     def play_victory_chord(self):
         if self.muted:
             return
-        audio = generate_victory_chord(VICTORY_FREQS)
-        sound = pygame.sndarray.make_sound(audio)
+        audio_mono = generate_victory_chord(VICTORY_FREQS)
+        audio_stereo = np.column_stack((audio_mono, audio_mono)).astype(np.int16)
+        sound = pygame.sndarray.make_sound(audio_stereo)
         sound.set_volume(0.9)
         sound.play()
 
@@ -432,8 +437,9 @@ class Simulation:
 
         self.clock = pygame.time.Clock()
 
-        # Generate maze (iteration 10: fresh maze with new random seed)
-        random.seed()  # Ensure different random seed on each run for uniqueness
+        # Generate maze (iteration 11: fresh maze with new random seed)
+        # Use a new seed based on time and randomness to ensure fresh maze each run
+        random.seed(time.time() + os.getpid())
         self.maze = Maze(self.grid_size, self.grid_size, complexity=self.complexity)
 
         # Define start and goal points: top-left and bottom-right open cells
@@ -495,6 +501,10 @@ class Simulation:
         self.exit_after_delay = False
         self.exit_delay_start = None
         self.exit_delay_seconds = 3
+
+        # Safety counter for max steps in auto-test mode to avoid infinite loops
+        self.max_total_steps = self.grid_size * self.grid_size * 30  # heuristic upper bound
+        self.total_steps_taken = 0
 
     def _auto_zoom_and_pan(self):
         # Adjust zoom to fit maze in window height max, then scale for 3 columns
@@ -637,10 +647,18 @@ class Simulation:
                 if not alg.finished:
                     alg.step()
                     step_count += 1
+                    self.total_steps_taken += 1
                     any_pending = True
                     if step_count >= max_steps_per_frame:
                         # Break early to avoid infinite processing in one frame
                         return
+                    # Safety check: if total steps exceed max allowed, terminate simulation forcibly
+                    if self.auto_test and self.total_steps_taken > self.max_total_steps:
+                        # Print error and exit with failure
+                        sys.stderr.write("ERROR: Maximum step count exceeded, possible infinite loop.\n")
+                        sys.stderr.flush()
+                        pygame.quit()
+                        sys.exit(1)
             if not any_pending:
                 # All finished, no need to continue stepping more times this frame
                 break
@@ -689,6 +707,7 @@ class Simulation:
                 # If strict completion required but not all finished or any no path, exit with error
                 if self.strict_completion:
                     if not self.check_all_finished() or self.check_any_finished_without_path():
+                        pygame.quit()
                         sys.exit(1)
                 running = False
                 break
@@ -705,6 +724,9 @@ class Simulation:
                         running = False
                     elif event.key == pygame.K_m:
                         self.audio.toggle_mute()
+                    elif event.key == pygame.K_SPACE:
+                        # Optional pause/resume toggle could be implemented here if needed
+                        pass
 
             if not self.finished:
                 self.update_algorithms()
@@ -728,6 +750,7 @@ class Simulation:
                     if all_finished and any_no_path:
                         # Respect strict completion flag: fail if strict, else finish gracefully
                         if self.strict_completion:
+                            pygame.quit()
                             sys.exit(1)
                         else:
                             if not self.finished:

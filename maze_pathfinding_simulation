@@ -428,7 +428,8 @@ class Simulation:
 
         self.clock = pygame.time.Clock()
 
-        # Generate maze (iteration 6: new random seed and fresh maze)
+        # Generate maze (iteration 7: fresh maze with new random seed)
+        random.seed()  # Ensure different random seed on each run for uniqueness
         self.maze = Maze(self.grid_size, self.grid_size, complexity=self.complexity)
 
         # Define start and goal points: top-left and bottom-right open cells

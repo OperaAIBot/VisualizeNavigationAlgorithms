@@ -271,18 +271,22 @@ class AStar(PathfindingAlgorithm):
     def step(self):
         if self.finished:
             return
-        if not self.frontier:
+        while self.frontier:
+            _, _, current = self.heapq.heappop(self.frontier)
+            if current in self.explored:
+                continue  # Skip already explored nodes (may appear multiple times in heap)
+            break
+        else:
             self.finished = True
             self.found_path = False
             return
-        _, _, current = self.heapq.heappop(self.frontier)
+
         if current == self.goal:
             self.finished = True
             self.found_path = True
             self.path = self.reconstruct_path()
             return
-        if current in self.explored:
-            return  # Skip already explored nodes (may appear multiple times in heap)
+
         self.explored.add(current)
         for ny, nx in self.neighbors(*current):
             tentative_g = self.g_score.get(current, math.inf) + 1
@@ -415,12 +419,23 @@ class Simulation:
 
         self.clock = pygame.time.Clock()
 
-        # Generate maze (iteration 4: new random seed and method is DFS backtracker with complexity)
+        # Generate maze (iteration 5: new random seed and fresh maze)
         self.maze = Maze(self.grid_size, self.grid_size, complexity=self.complexity)
 
         # Define start and goal points: top-left and bottom-right open cells
         self.start = self._find_open_cell_near(1, 1)
         self.goal = self._find_open_cell_near(self.grid_size - 2, self.grid_size - 2)
+
+        # Ensure start and goal are different and path accessible
+        if self.start == self.goal:
+            # Try to find another goal if same as start
+            for y in range(self.grid_size - 2, 0, -1):
+                for x in range(self.grid_size - 2, 0, -1):
+                    if self.maze.is_path(y, x) and (y, x) != self.start:
+                        self.goal = (y, x)
+                        break
+                if self.goal != self.start:
+                    break
 
         # Initialize algorithms
         self.algorithms = {
@@ -677,13 +692,14 @@ class Simulation:
 
                 # Check if all algorithms finished and found path
                 if self.check_all_finished():
-                    self.finished = True
-                    self.audio.stop_all()
-                    self.audio.play_victory_chord()
-                    if self.auto_test:
-                        print("SIMULATION_COMPLETE_SUCCESS", flush=True)
-                    self.exit_after_delay = True
-                    self.exit_delay_start = time.time()
+                    if not self.finished:
+                        self.finished = True
+                        self.audio.stop_all()
+                        self.audio.play_victory_chord()
+                        if self.auto_test:
+                            print("SIMULATION_COMPLETE_SUCCESS", flush=True)
+                        self.exit_after_delay = True
+                        self.exit_delay_start = time.time()
                 else:
                     # Defensive: if all algorithms finished but any no path found, handle accordingly
                     all_finished = all(alg.finished for alg in self.algorithms.values())
@@ -693,11 +709,12 @@ class Simulation:
                         if self.strict_completion:
                             sys.exit(1)
                         else:
-                            self.finished = True
-                            self.exit_after_delay = True
-                            self.exit_delay_start = time.time()
-                            if self.auto_test:
-                                print("SIMULATION_COMPLETE_SUCCESS", flush=True)
+                            if not self.finished:
+                                self.finished = True
+                                self.exit_after_delay = True
+                                self.exit_delay_start = time.time()
+                                if self.auto_test:
+                                    print("SIMULATION_COMPLETE_SUCCESS", flush=True)
             else:
                 # In auto_test mode, exit after delay
                 if self.auto_test and self.exit_after_delay and time.time() - self.exit_delay_start > self.exit_delay_seconds:

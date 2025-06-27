@@ -277,6 +277,7 @@ class AStar(PathfindingAlgorithm):
     def step(self):
         if self.finished:
             return
+
         while self.frontier:
             _, _, current = self.heapq.heappop(self.frontier)
             if current in self.explored:
@@ -428,7 +429,7 @@ class Simulation:
 
         self.clock = pygame.time.Clock()
 
-        # Generate maze (iteration 7: fresh maze with new random seed)
+        # Generate maze (iteration 8: fresh maze with new random seed)
         random.seed()  # Ensure different random seed on each run for uniqueness
         self.maze = Maze(self.grid_size, self.grid_size, complexity=self.complexity)
 

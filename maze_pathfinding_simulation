@@ -415,7 +415,7 @@ class Simulation:
 
         self.clock = pygame.time.Clock()
 
-        # Generate maze (iteration 3: new random seed and method is DFS backtracker with complexity)
+        # Generate maze (iteration 4: new random seed and method is DFS backtracker with complexity)
         self.maze = Maze(self.grid_size, self.grid_size, complexity=self.complexity)
 
         # Define start and goal points: top-left and bottom-right open cells
@@ -459,6 +459,11 @@ class Simulation:
         self.max_zoom = 2.5
         self.min_zoom = 0.5
         self._auto_zoom_and_pan()
+
+        # For auto-test mode exit handling
+        self.exit_after_delay = False
+        self.exit_delay_start = None
+        self.exit_delay_seconds = 3
 
     def _auto_zoom_and_pan(self):
         # Adjust zoom to fit maze in window height max, then scale for 3 columns
@@ -592,10 +597,17 @@ class Simulation:
 
     def update_algorithms(self):
         # Step all algorithms multiple times per frame according to speed setting
+        # To avoid infinite loops in auto-test, limit max steps per frame to prevent blocking
+        max_steps_per_frame = 1000  # safety cap to prevent infinite loops
+        step_count = 0
         for _ in range(self.speed):
             for alg_name, alg in self.algorithms.items():
                 if not alg.finished:
                     alg.step()
+                    step_count += 1
+                    if step_count >= max_steps_per_frame:
+                        # Break early to avoid infinite processing in one frame
+                        return
 
     def update_audio(self):
         # Update continuous tones for each algorithm with pitch and volume according to progress
@@ -630,9 +642,6 @@ class Simulation:
 
     def run(self):
         running = True
-        exit_after_delay = False
-        exit_delay_start = None
-        exit_delay_seconds = 3
 
         # For auto-test strict completion timeout to avoid infinite runs
         auto_test_timeout_seconds = 300  # 5 minutes max
@@ -645,7 +654,6 @@ class Simulation:
                 if self.strict_completion:
                     if not self.check_all_finished() or self.check_any_finished_without_path():
                         sys.exit(1)
-                # Else exit normally
                 running = False
                 break
 
@@ -674,8 +682,8 @@ class Simulation:
                     self.audio.play_victory_chord()
                     if self.auto_test:
                         print("SIMULATION_COMPLETE_SUCCESS", flush=True)
-                    exit_after_delay = True
-                    exit_delay_start = time.time()
+                    self.exit_after_delay = True
+                    self.exit_delay_start = time.time()
                 else:
                     # Defensive: if all algorithms finished but any no path found, handle accordingly
                     all_finished = all(alg.finished for alg in self.algorithms.values())
@@ -686,13 +694,13 @@ class Simulation:
                             sys.exit(1)
                         else:
                             self.finished = True
-                            exit_after_delay = True
-                            exit_delay_start = time.time()
+                            self.exit_after_delay = True
+                            self.exit_delay_start = time.time()
                             if self.auto_test:
                                 print("SIMULATION_COMPLETE_SUCCESS", flush=True)
             else:
                 # In auto_test mode, exit after delay
-                if self.auto_test and exit_after_delay and time.time() - exit_delay_start > exit_delay_seconds:
+                if self.auto_test and self.exit_after_delay and time.time() - self.exit_delay_start > self.exit_delay_seconds:
                     running = False
 
             self.draw()
